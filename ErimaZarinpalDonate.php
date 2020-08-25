@@ -1,10 +1,10 @@
 <?php
 /*
 Plugin Name: Erima Zarinpal Donate - حمایت مالی 
-Plugin URI: http://dblog.ir/?page_id=47
+Plugin URI: https://www.zarinpal.com/lab/?p=153
 Description: افزونه حمایت مالی از وبسایت ها -- برای استفاده تنها کافی است کد زیر را درون بخشی از برگه یا نوشته خود قرار دهید  [ErimaZarinpalDonate]
-Version: 1.0
-Author:  سید امیر
+Version: 1.5
+Author:  a.y & سید امیر
 Author URI: http://dblog.ir
 */
 
@@ -96,14 +96,16 @@ function ErimaZarinpalDonateForm() {
       $CallbackURL = EZD_GetCallBackURL();  // Required
 
 
-        $data = array('MerchantID' => $MerchantID,
-            'Email' 		=> $Email,
-            'Mobile' 		=> $Mobile,
-            'Amount' => $SendAmount,
-            'CallbackURL' => $CallbackURL,
-            'Description' => $SendDescription);
+        $data = array('merchant_id' => $MerchantID,
+            'metadata' => [
+                'mobile' => $Mobile,
+                'email' => $Email,
+            ],
+            'amount' => $SendAmount,
+            'callback_url' => $CallbackURL,
+            'description' => $SendDescription);
         $jsonData = json_encode($data);
-        $ch = curl_init('https://www.zarinpal.com/pg/rest/WebGate/PaymentRequest.json');
+        $ch = curl_init('https://api.zarinpal.com/pg/v4/payment/request.json');
         curl_setopt($ch, CURLOPT_USERAGENT, 'ZarinPal Rest Api v1');
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
         curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
@@ -117,11 +119,11 @@ function ErimaZarinpalDonateForm() {
         $result = json_decode($result, true);
         curl_close($ch);
       //Redirect to URL You can do it also by creating a form
-                if ($result["Status"] == 100) {
+        if ($result['data']['code'] == 100) {
         // WruteToDB
         
         EZD_AddDonate(array(
-					'Authority'     => $result['Authority'],
+					'Authority'     => $result['data']["authority"],
 					'Name'          => $Name,
 					'AmountTomaan'  => $SendAmount,
 					'Mobile'        => $Mobile,
@@ -142,13 +144,13 @@ function ErimaZarinpalDonateForm() {
         
         //Header('Location: https://www.zarinpal.com/pg/StartPay/'.$result['Authority']);
                     
-        $Location = 'https://www.zarinpal.com/pg/StartPay/'.$result['Authority'];
+        $Location = 'https://www.zarinpal.com/pg/StartPay/'.$result['data']["authority"];
 
         return "<script>document.location = '${Location}'</script><center>در صورتی که به صورت خودکار به درگاه بانک منتقل نشدید <a href='${Location}'>اینجا</a> را کلیک کنید.</center>";
       } 
       else 
       {
-        $error .= EZD_GetResaultStatusString($result['Status']) . "<br>\r\n";
+        $error .= EZD_GetResaultStatusString($result['errors']['code']) . "<br>\r\n";
       }
     }
   }
@@ -173,9 +175,9 @@ function ErimaZarinpalDonateForm() {
       else
       {
 
-          $data = array('MerchantID' => $MerchantID, 'Authority' => $Record['Authority'], 'Amount' => $Record['AmountTomaan']);
+          $data = array('merchant_id' => $MerchantID, 'authority' => $Record['Authority'], 'amount' => $Record['AmountTomaan']);
           $jsonData = json_encode($data);
-          $ch = curl_init('https://www.zarinpal.com/pg/rest/WebGate/PaymentVerification.json');
+          $ch = curl_init('https://api.zarinpal.com/pg/v4/payment/verify.json');
           curl_setopt($ch, CURLOPT_USERAGENT, 'ZarinPal Rest Api v1');
           curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
           curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
@@ -188,12 +190,12 @@ function ErimaZarinpalDonateForm() {
           $err = curl_error($ch);
           curl_close($ch);
           $result = json_decode($result, true);
-
-              if ($result['Status'] == 100) {
+//print_r($result);exit;
+          if ($result['data']['code'] == 100) {
 
           EZD_ChangeStatus($Authority, 'OK');
           $message .= get_option( 'EZD_IsOk') . "<br>\r\n";
-          $message .= 'کد پیگیری تراکنش:'. $result['RefID'] . "<br>\r\n";
+          $message .= 'کد پیگیری تراکنش:'. $result ['data']['ref_id'] . "<br>\r\n";
           
           $EZD_TotalAmount = get_option("EZD_TotalAmount");
           update_option("EZD_TotalAmount" , $EZD_TotalAmount + $Record['AmountTomaan']);
@@ -202,7 +204,7 @@ function ErimaZarinpalDonateForm() {
         {
           EZD_ChangeStatus($Authority, 'ERROR');
           $error .= get_option( 'EZD_IsError') . "<br>\r\n";
-          $error .= EZD_GetResaultStatusString($result['Status']) . "<br>\r\n";
+          $error .= EZD_GetResaultStatusString($result ['data']['code']) . "<br>\r\n";
         }
       }
     } 
